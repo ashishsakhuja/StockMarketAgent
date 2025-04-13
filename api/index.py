@@ -14,7 +14,6 @@ import pandas as pd
 
 app = FastAPI()
 load_dotenv()
-handler = Mangum(app)
 
 @app.get("/")
 def root():
@@ -184,3 +183,5 @@ def analyze_stock(request: StockRequest):
         "ticker": request.stock_ticker,
         "result": result
     }
+
+handler = Mangum(app)
