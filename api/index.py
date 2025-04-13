@@ -9,10 +9,12 @@ from sklearn.linear_model import LinearRegression
 from fastapi import FastAPI
 from pydantic import BaseModel
 import numpy as np
+from mangum import Mangum
 import pandas as pd
 
 app = FastAPI()
 load_dotenv()
+handler = Mangum(app)
 
 @app.get("/")
 def root():
