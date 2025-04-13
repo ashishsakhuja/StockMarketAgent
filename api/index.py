@@ -6,54 +6,66 @@ import os
 from dotenv import load_dotenv
 from langchain_community.chat_models import ChatOpenAI
 from sklearn.linear_model import LinearRegression
+from fastapi import FastAPI
+from pydantic import BaseModel
 import numpy as np
 import pandas as pd
+
+app = FastAPI()
+load_dotenv()
+
+@app.get("/")
+def root():
+    return {"message": "StockMarketAgent is live"}
 
 warnings.filterwarnings("ignore")
 scrape_tool = ScrapeWebsiteTool()
 
+class StockRequest(BaseModel):
+    stock_ticker: str
+    years: float
 
 def get_stock_data(ticker, years):
-    stock = yf.Ticker(ticker)
-    period = f"{years}y" if years >= 1 else "6mo"
-    hist = stock.history(period=period)
+    try:
+        stock = yf.Ticker(ticker)
+        period = f"{years}y" if years >= 1 else "6mo"
+        hist = stock.history(period=period)
 
-    if hist.empty:
-        return f"Could not retrieve stock data for {ticker}."
+        if hist.empty:
+            raise ValueError("No data returned from Yahoo Finance.")
 
-    hist = hist.tail(200)
-    latest_price = hist["Close"].iloc[-1]
+        hist = hist.tail(200)
+        latest_price = hist["Close"].iloc[-1]
 
-    if years < 1:
-        sma_short = hist["Close"].rolling(window=5).mean().iloc[-1]
-        sma_long = hist["Close"].rolling(window=20).mean().iloc[-1]
-    elif years < 3:
-        sma_short = hist["Close"].rolling(window=20).mean().iloc[-1]
-        sma_long = hist["Close"].rolling(window=50).mean().iloc[-1]
-    else:
-        sma_short = hist["Close"].rolling(window=50).mean().iloc[-1]
-        sma_long = hist["Close"].rolling(window=200).mean().iloc[-1]
+        if years < 1:
+            sma_short = hist["Close"].rolling(window=5).mean().iloc[-1]
+            sma_long = hist["Close"].rolling(window=20).mean().iloc[-1]
+        elif years < 3:
+            sma_short = hist["Close"].rolling(window=20).mean().iloc[-1]
+            sma_long = hist["Close"].rolling(window=50).mean().iloc[-1]
+        else:
+            sma_short = hist["Close"].rolling(window=50).mean().iloc[-1]
+            sma_long = hist["Close"].rolling(window=200).mean().iloc[-1]
 
-    short_dev = (latest_price - sma_short) / sma_short * 100
-    long_dev = (latest_price - sma_long) / sma_long * 100
+        short_dev = (latest_price - sma_short) / sma_short * 100
+        long_dev = (latest_price - sma_long) / sma_long * 100
 
-    summary = (
-        f"Latest closing price: ${latest_price:.2f}\n"
-        f"Short-term SMA: ${sma_short:.2f} ({short_dev:.2f}% deviation)\n"
-        f"Long-term SMA: ${sma_long:.2f} ({long_dev:.2f}% deviation)"
-    )
-
-    return summary
-
+        summary = (
+            f"Latest closing price: ${latest_price:.2f}\n"
+            f"Short-term SMA: ${sma_short:.2f} ({short_dev:.2f}% deviation)\n"
+            f"Long-term SMA: ${sma_long:.2f} ({long_dev:.2f}% deviation)"
+        )
+        return summary
+    except Exception as e:
+        return f"Could not retrieve stock data for {ticker}. Error: {str(e)}"
 
 def get_stock_news(ticker):
     url = f"https://finance.yahoo.com/quote/{ticker}?p={ticker}&.tsrc=fin-srch"
     response = scrape_tool.run(website_url=url)
-    response = response[:1000]  # Trim raw content to avoid token explosion
+    response = response[:1000]
     headlines = [line.strip() for line in response.split("\n") if line.strip()][:3]
     summary = "Latest headlines: " + ", ".join(headlines) if headlines else "No recent news found."
     return {"output": summary, "source": url}
-
 
 def estimate_roi(ticker, years_ahead=5):
     stock = yf.Ticker(ticker)
@@ -69,7 +81,6 @@ def estimate_roi(ticker, years_ahead=5):
 
     return f"Estimated ROI: {annual_return*100:.2f}% per year\n" \
            f"Projected price in {years_ahead} years: ${future_value:.2f}"
-
 
 def forecast_price_linear(ticker, years_ahead=5):
     stock = yf.Ticker(ticker)
@@ -99,17 +110,11 @@ def forecast_price_linear(ticker, years_ahead=5):
         f"95% Confidence Interval: ${lower_bound:.2f} - ${upper_bound:.2f}"
     )
 
-
-if __name__ == "__main__":
-    load_dotenv()
+@app.post("/analyze")
+def analyze_stock(request: StockRequest):
     openai_api_key = os.getenv("OPENAI_API_KEY")
+    llm = ChatOpenAI(model_name="gpt-4", openai_api_key=openai_api_key)
 
-    if not openai_api_key:
-        openai_api_key = input("🔐 Enter your OpenAI API key: ")
-
-    llm = ChatOpenAI(model_name='gpt-4', openai_api_key=openai_api_key)
-
-    # Agents
     stock_data_analyst = Agent(
         role="Stock Data Analyst",
         goal="Retrieve and analyze stock market data, identifying trends and trading signals.",
@@ -138,10 +143,8 @@ if __name__ == "__main__":
         allow_delegation=False
     )
 
-    # Tasks
     fetch_stock_data = Task(
-        description="Retrieve stock data for {stock_ticker}, analyze trends, and detect key signals based on a "
-                    "{years}-year horizon.",
+        description="Retrieve stock data for {stock_ticker}, analyze trends, and detect key signals based on a {years}-year horizon.",
         expected_output="Stock price trends, moving averages, and performance deviations based on investment horizon.",
         agent=stock_data_analyst,
         function=lambda inputs: get_stock_data(inputs["stock_ticker"], inputs["years"])
@@ -163,31 +166,19 @@ if __name__ == "__main__":
     )
 
     provide_recommendation = Task(
-        description="Based on the stock data and news analysis for a {years}-year outlook, determine if {stock_ticker} "
-                    "is a Buy, Hold, or Sell.",
-        expected_output="Final investment decision with reasoning. Explicitly mention Buy, Hold, or Sell. "
-                        "Explicitly mention confidence level percentage. Explicitly mention a price prediction. "
-                        "Explicitly mention any sources used at the end, this includes website links.",
+        description="Based on the stock data and news analysis for a {years}-year outlook, determine if {stock_ticker} is a Buy, Hold, or Sell.",
+        expected_output="Final investment decision with reasoning. Explicitly mention Buy, Hold, or Sell. Explicitly mention confidence level percentage. Explicitly mention a price prediction. Explicitly mention any sources used at the end, this includes website links.",
         agent=investment_advisor
     )
 
-    # Crew
     stock_market_crew = Crew(
         agents=[stock_data_analyst, news_analyst, investment_advisor],
         tasks=[fetch_stock_data, fetch_news, forecast_task, provide_recommendation],
         verbose=False
     )
 
-    stock_ticker = input("📈 Enter stock ticker (Ex: AAPL, TSLA, NVDA): ").upper()
-    years = input("📅 Enter number of years you're interested in (e.g. 0.5, 1, 5): ")
-
-    print("\n🧠 Analyzing...\n")
-    try:
-        years = float(years)
-        result = stock_market_crew.kickoff(inputs={"stock_ticker": stock_ticker, "years": years})
-        print("\n\n**📢 Disclaimer**\nThe information provided is for educational purposes only and does not constitute "
-              "financial advice. Use at your own risk.")
-        print("\n💡 Final Investment Insight:\n")
-        print(result)
-    except ValueError:
-        print("❌ Invalid input for years. Please enter a number like 1, 2, or 0.5.")
+    result = stock_market_crew.kickoff(inputs={"stock_ticker": request.stock_ticker, "years": request.years})
+    return {
+        "ticker": request.stock_ticker,
+        "result": result
+    }
