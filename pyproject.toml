@@ -15,4 +15,4 @@ dependencies = [
 ]
 
 [tool.crewai]
-entrypoint = "src/agent.py"
+entrypoint = "src/main.py"
