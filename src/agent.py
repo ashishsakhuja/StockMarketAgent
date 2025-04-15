@@ -53,7 +53,7 @@ def get_stock_data(ticker, years):
 def get_stock_news(ticker):
     url = f"https://finance.yahoo.com/quote/{ticker}?p={ticker}&.tsrc=fin-srch"
     response = scrape_tool.run(website_url=url)
-    response = response[:1000]  # Trim raw content to avoid token explosion
+    response = response[:900]  # Trim raw content to avoid token explosion
     headlines = [line.strip() for line in response.split("\n") if line.strip()][:3]
     summary = "Latest headlines: " + ", ".join(headlines) if headlines else "No recent news found."
     return {"output": summary, "source": url}
@@ -81,7 +81,7 @@ def forecast_price_linear(ticker, years_ahead=5):
     if hist.empty:
         return "No data available."
 
-    hist = hist.reset_index().tail(300)
+    hist = hist.reset_index().tail(200)
     hist['Days'] = (hist['Date'] - hist['Date'].min()).dt.days
     X = hist[['Days']]
     y = hist['Close']

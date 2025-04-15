@@ -1,0 +1,18 @@
+[project]
+name = "stock-market-agent"
+version = "0.1.0"
+description = "An AI agent that analyzes stock trends and provides investment insights."
+dependencies = [
+    "crewai==0.105.0",
+    "crewai-tools==0.37.0",
+    "yfinance",
+    "langchain",
+    "langchain-community",
+    "scikit-learn",
+    "pandas",
+    "numpy",
+    "python-dotenv"
+]
+
+[tool.crewai]
+entrypoint = "src/agent.py"
