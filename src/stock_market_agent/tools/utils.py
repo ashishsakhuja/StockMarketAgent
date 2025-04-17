@@ -40,7 +40,7 @@ def get_stock_news(ticker):
     from .scrape import scrape_tool
     url = f"https://finance.yahoo.com/quote/{ticker}?p={ticker}&.tsrc=fin-srch"
     response = scrape_tool.run(website_url=url)
-    response = response[:1000]
+    response = response[:600]
     headlines = [line.strip() for line in response.split("\n") if line.strip()][:3]
     summary = "Latest headlines: " + ", ".join(headlines) if headlines else "No recent news found."
     return {"output": summary, "source": url}
