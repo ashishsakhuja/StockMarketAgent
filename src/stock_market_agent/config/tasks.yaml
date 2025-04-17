@@ -1,0 +1,20 @@
+tasks:
+  - id: fetch_stock_data
+    description: Retrieve stock data for {{ stock_ticker }} and analyze price trends over the last {{ years }} years.
+    expected_output: Stock price trends, SMA analysis, and key trading indicators.
+    agent_id: stock_data_analyst
+
+  - id: fetch_news
+    description: Scrape financial news and summarize key insights for {{ stock_ticker }}.
+    expected_output: Summary of latest earnings reports and headlines.
+    agent_id: news_analyst
+
+  - id: forecast_task
+    description: Forecast future ROI and expected stock price for {{ stock_ticker }} for the next {{ years }} years.
+    expected_output: Annualized ROI with predicted price and confidence intervals.
+    agent_id: investment_advisor
+
+  - id: provide_recommendation
+    description: Based on stock data and news, provide Buy/Hold/Sell recommendation for {{ stock_ticker }}.
+    expected_output: Final investment decision with reasoning, confidence level, and price forecast.
+    agent_id: investment_advisor
